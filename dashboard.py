@@ -1,28 +1,21 @@
 import streamlit as st
-import time
 import requests
 import json
 import numpy as np
 import pandas as pd
-import altair as alt
 import matplotlib.pyplot as plt
 # csfont = {'fontname':'Nexa Bold'} # Tuning font for plots
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
-
-import plotly.figure_factory as ff
-
 from PIL import Image
-
-import shap
 # ------------------------------------------------------
 
 
 # HTML requests to retrieve data -----------------------
 
 # Test/new clients
-# @st.cache
-def get_clients(suppress_st_warning=True):
+@st.cache(suppress_st_warning=True)
+def get_clients():
     response = requests.get("https://datascientist.pythonanywhere.com/clients")
     clients = pd.read_json(response.content.decode('utf-8'))
     return clients
@@ -33,8 +26,8 @@ clients = get_clients()
 client_ID = st.sidebar.selectbox('Choose a client', clients['SK_ID_CURR'])
 
 # Client data chosen by user
-# @st.cache
-def get_chosen_client(suppress_st_warning=True):
+@st.cache(suppress_st_warning=True)
+def get_chosen_client():
     response = requests.get("https://datascientist.pythonanywhere.com/api?id="+str(client_ID))
     chosen_client = pd.read_json(response.content.decode('utf-8'))
     return chosen_client
@@ -42,8 +35,8 @@ def get_chosen_client(suppress_st_warning=True):
 chosen_client = get_chosen_client()
 
 # Cluster data where chosen client was predicted to be
-# @st.cache
-def get_cluster_client(suppress_st_warning=True):
+@st.cache(suppress_st_warning=True)
+def get_cluster_client():
     response = requests.get("https://datascientist.pythonanywhere.com/cluster?id="+str(client_ID))
     cluster_client = pd.read_json(response.content.decode('utf-8'))
     return cluster_client
@@ -77,8 +70,11 @@ Your dashboard to know **everything about your client** :sunglasses:
 
 """
 Choose a client on the sidebar. First table is the client's data. \n
-Then you can choose several options to filter true all clients data to compare between the client, all the clients and 
-the group you filtered.
+Then you can choose several options to filter through all clients and make a group.
+
+The dashboard shows first the trust indicator (see note below) and the decision plus the score of the model. Then come different graphs plotting important features for the prediction and/or easy feature to understand. 
+
+Each graph plots values of all clients, group you created with filters, similar clients according to the model and finally the client, respectively.
 """
 
 
