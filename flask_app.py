@@ -20,7 +20,7 @@ valid_clients = pd.read_csv(path_files+'clients_data.csv')
 # Get data of test clients
 @app.route('/clients')
 def get_clients():
-    clients_json = clients.to_json()
+    clients_json = json.loads(clients.to_json())
     return jsonify(clients_json)
 
 
@@ -33,7 +33,7 @@ def get_client():
         return "Error: No valid id provided. Please specify a valid id."
 
     client_chosen = clients.loc[clients['SK_ID_CURR']==id]
-    client_chosen = client_chosen.to_json()
+    client_chosen = json.loads(client_chosen.to_json())
     return jsonify(client_chosen)
 
 # Get data of cluster where chosen client was predicted to be
@@ -56,7 +56,7 @@ def get_cluster():
 
     # Get cluster within valid data
     cluster = valid_clients.loc[(valid_clients['Label']==label) & (valid_clients['TARGET']==target)]
-    cluster_json = cluster.to_json()
+    cluster_json = json.loads(cluster.to_json())
     return jsonify(cluster_json)
 
 # @app.route('/display/<filename>')

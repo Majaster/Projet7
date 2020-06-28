@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import altair as alt
 import matplotlib.pyplot as plt
-csfont = {'fontname':'Nexa Bold'} # Tuning font for plots
+# csfont = {'fontname':'Nexa Bold'} # Tuning font for plots
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 
@@ -20,33 +20,45 @@ import shap
 
 # HTML requests to retrieve data -----------------------
 
-# Test clients
-response = requests.get("https://datascientist.pythonanywhere.com/clients")
-content = json.loads(response.content.decode('utf-8'))
-clients = pd.read_json(content)
-clients = clients.loc[clients['DAYS_EMPLOYED']<0]
+# Test/new clients
+# @st.cache
+def get_clients(suppress_st_warning=True):
+    response = requests.get("https://datascientist.pythonanywhere.com/clients")
+    clients = pd.read_json(response.content.decode('utf-8'))
+    return clients
+
+clients = get_clients()
 
 # User picks a client in the sidebar
 client_ID = st.sidebar.selectbox('Choose a client', clients['SK_ID_CURR'])
 
 # Client data chosen by user
-response = requests.get("https://datascientist.pythonanywhere.com/api?id="+str(client_ID))
-content = json.loads(response.content.decode('utf-8'))
-chosen_client = pd.read_json(content)
-chosen_client = chosen_client.loc[chosen_client['DAYS_EMPLOYED']<0]
+# @st.cache
+def get_chosen_client(suppress_st_warning=True):
+    response = requests.get("https://datascientist.pythonanywhere.com/api?id="+str(client_ID))
+    chosen_client = pd.read_json(response.content.decode('utf-8'))
+    return chosen_client
+
+chosen_client = get_chosen_client()
 
 # Cluster data where chosen client was predicted to be
-response = requests.get("https://datascientist.pythonanywhere.com/cluster?id="+str(client_ID))
-content = json.loads(response.content.decode('utf-8'))
-cluster_client = pd.read_json(content)
-cluster_client = cluster_client.loc[cluster_client['DAYS_EMPLOYED']<0]
+# @st.cache
+def get_cluster_client(suppress_st_warning=True):
+    response = requests.get("https://datascientist.pythonanywhere.com/cluster?id="+str(client_ID))
+    cluster_client = pd.read_json(response.content.decode('utf-8'))
+    return cluster_client
+
+cluster_client = get_cluster_client()
+
 
 # Shows descriptive informations of the chosen client in the sidebar
+st.sidebar.markdown('Age : ' + str(np.int(chosen_client['DAYS_BIRTH'].values / 365)) + ' yrs')
 st.sidebar.markdown('Gender : ' + chosen_client['CODE_GENDER'].values[0])
 st.sidebar.markdown('Children : ' + str(chosen_client['CNT_CHILDREN'].values[0]))
 st.sidebar.markdown('Owns car : ' + chosen_client['FLAG_OWN_CAR'].values[0])
-st.sidebar.markdown('Credit Amount : ' + str(np.int(chosen_client['AMT_CREDIT'].values[0])))
-st.sidebar.markdown('Annuity Amount : ' + str(np.int(chosen_client['AMT_ANNUITY'].values[0])))
+st.sidebar.markdown('Credit Amount : ' + str(np.int(chosen_client['AMT_CREDIT'].values[0])) + '$')
+st.sidebar.markdown('Annuity Amount : ' + str(np.int(chosen_client['AMT_ANNUITY'].values[0])) + '$')
+st.sidebar.markdown('TOTAL Income Amount : ' + str(np.int(chosen_client['AMT_INCOME_TOTAL'].values[0])) + '$')
 
 
 # Start of the main page ------------------------------
@@ -74,6 +86,7 @@ the group you filtered.
 proba_mean = clients['Proba'].mean()
 amt_credit_mean = clients['AMT_CREDIT'].mean()
 amt_annuity_mean = clients['AMT_ANNUITY'].mean()
+amt_income_mean = clients['AMT_INCOME_TOTAL'].mean()
 days_birth_mean = clients['DAYS_BIRTH'].mean()
 days_employed_mean = clients['DAYS_EMPLOYED'].mean()
 days_credit_max_mean = clients['DAYS_CREDIT_max'].mean()
@@ -82,13 +95,14 @@ days_credit_max_mean = clients['DAYS_CREDIT_max'].mean()
 proba_cluster_mean = cluster_client['Proba'].mean()
 amt_credit_cluster_mean = cluster_client['AMT_CREDIT'].mean()
 amt_annuity_cluster_mean = cluster_client['AMT_ANNUITY'].mean()
+amt_income_cluster_mean = cluster_client['AMT_INCOME_TOTAL'].mean()
 days_birth_cluster_mean = cluster_client['DAYS_BIRTH'].mean()
 days_employed_cluster_mean = cluster_client['DAYS_EMPLOYED'].mean()
 days_credit_max_cluster_mean = cluster_client['bureau_DAYS_CREDIT_max'].mean()
 
-# Part of data of chosen client to display 
-chosen_client_cut = chosen_client[['AMT_CREDIT','AMT_ANNUITY','DAYS_BIRTH',
-                                   'DAYS_EMPLOYED','DAYS_CREDIT_max']]
+# Part of chosen client data to display (quick view)
+chosen_client_cut = chosen_client[['AMT_CREDIT','AMT_INCOME_TOTAL',
+                                   'DAYS_EMPLOYED','previous_AMT_CREDIT_mean']]
 
 st.subheader('Client data')
 st.dataframe(chosen_client_cut, height=100)
@@ -97,6 +111,7 @@ st.dataframe(chosen_client_cut, height=100)
 proba_client = chosen_client['Proba'].values[0]
 amt_credit_client = chosen_client['AMT_CREDIT'].values[0]
 amt_annuity_client = chosen_client['AMT_ANNUITY'].values[0]
+amt_income_client = chosen_client['AMT_INCOME_TOTAL'].values[0]
 days_birth_client = chosen_client['DAYS_BIRTH'].values[0]
 days_employed_client = chosen_client['DAYS_EMPLOYED'].values[0]
 days_credit_max_client = chosen_client['DAYS_CREDIT_max'].values[0]
@@ -117,26 +132,38 @@ if st.checkbox('Show all clients data'):
     clients
 
 
-# User can choose several features to group similar clients ('Man' by default)
-st.subheader('Filter data with listed options')
+# User can choose several features to group similar clients ('Man' by default) ------
+st.subheader('Filter data with listed options below')
 
 # Copy of clients dataframe
 clients_filtered = clients.copy()
 
 # User chooses options from list
 filters = st.multiselect('Clustering filters :',
-                                 ['Men','Women','High credit amount','Days employed'], 
+                                 ['Men','Women','High credit amount','Age : 15-25','Age : 25-40',
+                                  'Age : 40-60','Age : 60+'], 
                                  ['Men'])
     
 # Mask to filter dataframe
 # selection = df['Gender'].isin(cluster_options)
 if 'Men' in filters:
-    clients_filtered = clients_filtered.loc[clients_filtered['CODE_GENDER']=='M']
+    clients_filtered = clients_filtered.loc[clients_filtered['CODE_GENDER']=='Male']
 if 'Women' in filters:
-    clients_filtered = clients_filtered.loc[clients_filtered['CODE_GENDER']=='F']
+    clients_filtered = clients_filtered.loc[clients_filtered['CODE_GENDER']=='Female']
 if 'High credit amount' in filters:
     clients_filtered = clients_filtered.loc[clients_filtered['AMT_CREDIT'] > 5e5]
-
+if 'Age : 15-25' in filters:
+    clients_filtered = clients_filtered.loc[clients_filtered['DAYS_BIRTH'] / 365 <= 25.] 
+if 'Age : 25-40' in filters:
+    clients_filtered = clients_filtered.loc[(clients_filtered['DAYS_BIRTH'] / 365 > 25.) & 
+                                            (clients_filtered['DAYS_BIRTH'] / 365 <= 40.)] 
+if 'Age : 40-60' in filters:
+    clients_filtered = clients_filtered.loc[(clients_filtered['DAYS_BIRTH'] / 365 > 40.) & 
+                                            (clients_filtered['DAYS_BIRTH'] / 365 <= 60.)] 
+if 'Age : 60+' in filters:
+    clients_filtered = clients_filtered.loc[clients_filtered['DAYS_BIRTH'] / 365 > 60.] 
+    
+    
 # Show cluster data
 if st.checkbox('Show filtered data'):
     clients_filtered
@@ -145,6 +172,7 @@ if st.checkbox('Show filtered data'):
 proba_filtered_mean = clients_filtered['Proba'].mean()
 amt_credit_filtered_mean = clients_filtered['AMT_CREDIT'].mean()
 amt_annuity_filtered_mean = clients_filtered['AMT_ANNUITY'].mean()
+amt_income_filtered_mean = clients_filtered['AMT_INCOME_TOTAL'].mean()
 days_birth_filtered_mean = clients_filtered['DAYS_BIRTH'].mean()
 days_employed_filtered_mean = clients_filtered['DAYS_EMPLOYED'].mean()
 days_credit_max_filtered_mean = clients_filtered['DAYS_CREDIT_max'].mean()
@@ -193,10 +221,10 @@ ax.annotate(indicator_client, (0.5, 0.5), xycoords='axes fraction', va='center',
 
 # Message "Accepter" or "Refuser"
 if proba_client >= 0.5:
-    ax.annotate("REFUSER", (0.25, 0.1), xycoords='axes fraction', 
+    ax.annotate("REJECTED", (0.25, 0.1), xycoords='axes fraction', 
                 va='center', ha='center', fontsize=14, color=bad)
 else:
-    ax.annotate("ACCEPTER", (0.25, 0.1), xycoords='axes fraction', 
+    ax.annotate("ACCEPTED", (0.25, 0.1), xycoords='axes fraction', 
                 va='center', ha='center', fontsize=14, color=good)
 
 # Threshold (all data - gray)
@@ -218,7 +246,7 @@ ax.set_ylim([0,1])
 ax.set_xticks([])
 ax.set_yticks([])  
 
-# Graph 2 : days_birth ---------------------------------------
+# Graph 2 : AGE ------------------------------------------------------
 ax2 = fig.add_subplot(spec[-1, :2])
 ax2.set_facecolor('#e4eef9')
 
@@ -235,20 +263,19 @@ plt.scatter(x[0],y[0], lw=16, color='#443028')
 plt.scatter(x[1],y[1], lw=16, color='#94563a')
 plt.scatter(x[2],y[2], lw=16, color='#cb7b48')
 plt.scatter(x[3],y[3], lw=16, color='#f1943c')
-ax2.annotate(str(np.round(y[0],1)), (x[0], y[0]+14), ha='center', fontsize=8, color='#443028') #, **csfont)
-ax2.annotate(str(np.round(y[1],1)), (x[1], y[1]+14), ha='center', fontsize=8, color='#94563a') #, **csfont)
-ax2.annotate(str(np.round(y[2],1)), (x[2], y[2]+14), ha='center', fontsize=8, color='#cb7b48') #, **csfont)
-ax2.annotate(str(np.round(y[3],1)), (x[3], y[3]+14), ha='center', fontsize=8, color='#f1943c') #, **csfont)
+ax2.annotate(str(np.round(y[0],1)), (x[0], y[0]+0.35*np.max(y)), ha='center', fontsize=8, color='#443028') #, **csfont)
+ax2.annotate(str(np.round(y[1],1)), (x[1], y[1]+0.35*np.max(y)), ha='center', fontsize=8, color='#94563a') #, **csfont)
+ax2.annotate(str(np.round(y[2],1)), (x[2], y[2]+0.35*np.max(y)), ha='center', fontsize=8, color='#cb7b48') #, **csfont)
+ax2.annotate(str(np.round(y[3],1)), (x[3], y[3]+0.35*np.max(y)), ha='center', fontsize=8, color='#f1943c') #, **csfont)
 
 ax2.set_xlim([0,5])
-ax2.set_ylim([0,np.max(y)*2])
+ax2.set_ylim([0,np.max(y)*2.2])
 ax2.set_xticks(x)
 ax2.set_xticklabels(xlabels)
 ax2.tick_params(axis='both', which='major', labelsize=8)
-ax2.annotate('Age (years)', (0.5, 0.83), xycoords='axes fraction', ha='center', fontsize=11, color='#443028') #, **csfont)
-# ax2.set_title('Age (years)', fontsize=12, color='#0F2354', **csfont)
+ax2.annotate('Age', (0.5, 0.83), xycoords='axes fraction', ha='center', fontsize=11, color='#443028') #, **csfont)
 
-# Graph 3 : amt_credit_client --------------------------------------
+# Graph 3 : CREDIT -----------------------------------------------
 ax3 = fig.add_subplot(spec[0, 2:])
 ax3.set_facecolor('#e4eef9')
 
@@ -265,13 +292,14 @@ ax3.set_xticklabels(xlabels)
 ax3.tick_params(axis='both', which='major', labelsize=8)
 ax3.annotate('Credit amount', (0.5, 0.83), xycoords='axes fraction', ha='center', fontsize=11, color='#194575') #, **csfont)
 
-# Graph 4 : amount_annuity -----------------------------------------
+# Graph 4 : INCOME ------------------------------------------------
 ax4 = fig.add_subplot(spec[1, 2:])
 ax4.set_facecolor('#e4eef9')
 
 x = [1, 2, 3, 4]
 xlabels = ['All','Group','Similar','Client']
-y = [amt_annuity_mean, amt_annuity_filtered_mean, amt_annuity_cluster_mean, amt_annuity_client]
+# y = [amt_annuity_mean, amt_annuity_filtered_mean, amt_annuity_cluster_mean, amt_annuity_client]
+y = [amt_income_mean, amt_income_filtered_mean, amt_income_cluster_mean, amt_income_client]
 
 plt.bar(x, y, color=['#721935','#e22768','#f92236','#f1943c'])
 
@@ -280,9 +308,9 @@ ax4.set_ylim([0,np.max(y)*1.5])
 ax4.set_xticks(x)
 ax4.set_xticklabels(xlabels)
 ax4.tick_params(axis='both', which='major', labelsize=8)
-ax4.annotate('Annuity amount', (0.5, 0.83), xycoords='axes fraction', ha='center', fontsize=11, color='#721935')#, **csfont)
+ax4.annotate('Total Income', (0.5, 0.83), xycoords='axes fraction', ha='center', fontsize=11, color='#721935')#, **csfont)
 
-# Graph 5 : days_employed -------------------------------------------
+# Graph 5 : DAYS EMPLOYED ---------------------------------------------
 ax5 = fig.add_subplot(spec[2, 2:])
 ax5.set_facecolor('#e4eef9')
 
@@ -305,10 +333,10 @@ st.pyplot()
 """
 **Note**
 
-A : confiance élevée \n
-B : confiance plutôt élevée \n
-C : confiance plutôt basse \n
-D : confiance basse \n
+A : reliable \n
+B : quite reliable \n
+C : lightly reliable \n
+D : not reliable \n
 """
 
 
