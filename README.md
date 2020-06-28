@@ -14,6 +14,6 @@ Pour lancer l'application (sous Python), l'utilisateur doit lancer la commande s
   
 Un nouvel onglet du navigateur par défaut s'ouvre alors et l'application se lance automatiquement une première fois.
 
-Les instructions d'utilisation de trouvent directement sur la page de l'application.
+Les instructions d'utilisation se trouvent directement sur la page de l'application.
 
 Les packages nécessaires à l'utilisation de l'application se trouvent dans le fichier "requirements.txt".
